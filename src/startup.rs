@@ -3,7 +3,11 @@ use std::net::TcpListener;
 use axum::Router;
 use sqlx::PgPool;
 
-use crate::{settings::{Settings, DbSettings}, state::AppState, session::get_session_layer};
+use crate::{
+    session::get_session_layer,
+    settings::{DbSettings, Settings},
+    state::AppState,
+};
 
 pub type Server =
     hyper::Server<hyper::server::conn::AddrIncoming, axum::routing::IntoMakeService<Router>>;
@@ -22,7 +26,7 @@ impl Application {
             let address = format!("{}:{}", &settings.app.host, settings.app.port);
             TcpListener::bind(address)?
         };
-        
+
         let server = make_server(listener, db_pool.clone())?;
 
         Ok(Self {
@@ -38,13 +42,13 @@ impl Application {
     }
 }
 
-pub fn make_server(
-    listener: TcpListener,
-    db_pool: PgPool,
-) -> anyhow::Result<Server> {
-    use tower_http::{catch_panic::CatchPanicLayer, trace::{TraceLayer, self}};
-    use tracing::Level;
+pub fn make_server(listener: TcpListener, db_pool: PgPool) -> anyhow::Result<Server> {
     use anyhow::Context;
+    use tower_http::{
+        catch_panic::CatchPanicLayer,
+        trace::{self, TraceLayer},
+    };
+    use tracing::Level;
 
     let state = AppState::new(db_pool.clone());
     let router = Router::new()
@@ -53,7 +57,7 @@ pub fn make_server(
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
-                .on_response(trace::DefaultOnResponse::new().level(Level::INFO))
+                .on_response(trace::DefaultOnResponse::new().level(Level::INFO)),
         )
         .layer(get_session_layer(db_pool))
         .with_state(state);

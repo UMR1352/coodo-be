@@ -1,4 +1,4 @@
-use sqlx::{PgPool, Postgres, pool::PoolConnection};
+use sqlx::{pool::PoolConnection, PgPool, Postgres};
 
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -13,4 +13,4 @@ impl AppState {
     pub async fn db_connection(&self) -> sqlx::Result<PoolConnection<Postgres>> {
         self.db_pool.acquire().await
     }
-} 
+}

@@ -1,9 +1,12 @@
 use axum::async_trait;
-use axum_sessions::{async_session::{self, Session, SessionStore}, SessionLayer};
+use axum_sessions::{
+    async_session::{self, Session, SessionStore},
+    SessionLayer,
+};
 use sqlx::{pool::PoolConnection, PgPool, Postgres};
 
 pub fn get_session_layer(db_pool: PgPool) -> SessionLayer<UserSessionStore> {
-    use axum_sessions::PersistencePolicy;    
+    use axum_sessions::PersistencePolicy;
 
     let (session_store, secret) = UserSessionStore::new(db_pool);
     SessionLayer::new(session_store, &secret)

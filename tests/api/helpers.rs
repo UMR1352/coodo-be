@@ -30,10 +30,10 @@ impl TestApp {
         let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
         let port = listener.local_addr().unwrap().port();
         let address = format!("http://127.0.0.1:{}", port);
-        let server =
-            coodo_be::startup::make_server(listener, pool.clone()).expect("Failed to create server");
+        let server = coodo_be::startup::make_server(listener, pool.clone())
+            .expect("Failed to create server");
         let server_handle = tokio::spawn(server);
-        
+
         Self {
             address,
             port,
@@ -43,7 +43,8 @@ impl TestApp {
     }
 
     pub async fn get_user(&self, client: &mut Client) -> anyhow::Result<User> {
-        client.get(format!("{}/session", &self.address))
+        client
+            .get(format!("{}/session", &self.address))
             .send()
             .await
             .context("Failed to send GET /session")?
@@ -52,4 +53,3 @@ impl TestApp {
             .context("Failed to parse response body")
     }
 }
-

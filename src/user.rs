@@ -34,6 +34,12 @@ impl UserHandleGenerator {
     }
 }
 
+impl Default for UserHandleGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserHandle(String);
 

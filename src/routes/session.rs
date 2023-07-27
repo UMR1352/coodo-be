@@ -1,14 +1,13 @@
-use axum::{Router, Json};
+use axum::{Json, Router};
 use axum_sessions::extractors::WritableSession;
 use chrono::Duration;
 
-use crate::{user::User, state::AppState};
+use crate::{state::AppState, user::User};
 
 pub fn routes() -> Router<AppState> {
     use axum::routing::get;
 
-    Router::new()
-        .route("/session", get(get_session))
+    Router::new().route("/session", get(get_session))
 }
 
 #[tracing::instrument(skip_all, ret, name = "Get session")]

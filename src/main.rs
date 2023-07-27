@@ -1,5 +1,5 @@
 use anyhow::Context;
-use coodo_be::{startup::Application, settings::get_settings, telemetry};
+use coodo_be::{settings::get_settings, startup::Application, telemetry};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {

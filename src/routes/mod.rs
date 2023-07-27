@@ -5,6 +5,5 @@ use crate::state::AppState;
 mod session;
 
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .merge(session::routes())
+    Router::new().merge(session::routes())
 }
