@@ -4,4 +4,5 @@ pub mod settings;
 pub mod startup;
 pub mod state;
 pub mod telemetry;
+pub mod todo;
 pub mod user;

@@ -1,11 +1,21 @@
 use serde::Deserialize;
 use serde_aux::prelude::deserialize_number_from_string;
+use serde_with::{serde_as, DurationSeconds};
 use sqlx::{postgres::PgConnectOptions, ConnectOptions};
+use std::time::Duration;
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
     pub db: DbSettings,
     pub app: AppSettings,
+    pub todo_handler: TodoHandlerSettings,
+}
+
+#[serde_as]
+#[derive(Debug, Deserialize)]
+pub struct TodoHandlerSettings {
+    #[serde_as(as = "DurationSeconds<u64>")]
+    pub store_interval: Duration,
 }
 
 #[derive(Debug, Deserialize)]
@@ -29,7 +39,7 @@ impl DbSettings {
 
     pub fn with_db(&self) -> PgConnectOptions {
         let mut options = self.without_db().database(&self.name);
-        options.log_statements(axum_sessions::async_session::log::LevelFilter::Debug);
+        options.log_statements(axum_sessions::async_session::log::LevelFilter::Trace);
 
         options
     }

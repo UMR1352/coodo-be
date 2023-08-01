@@ -50,7 +50,9 @@ impl AsRef<str> for UserHandle {
 }
 
 impl UserHandle {
+    #[tracing::instrument(name = "user_handle", ret)]
     pub async fn new() -> Self {
+        tracing::info!("start");
         USER_HANDLE_GEN
             .get_or_init(|| async { Mutex::new(UserHandleGenerator::new()) })
             .await

@@ -7,4 +7,5 @@ db:
   username: "emarconi"
   password: "supa_password"
   name: "todo"
-
+todo_handler:
+  store_interval: 600

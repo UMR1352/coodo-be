@@ -6,12 +6,13 @@ use axum_sessions::{
 use sqlx::{pool::PoolConnection, PgPool, Postgres};
 
 pub fn get_session_layer(db_pool: PgPool) -> SessionLayer<UserSessionStore> {
-    use axum_sessions::PersistencePolicy;
+    use axum_sessions::{PersistencePolicy, SameSite};
 
     let (session_store, secret) = UserSessionStore::new(db_pool);
     SessionLayer::new(session_store, &secret)
         .with_persistence_policy(PersistencePolicy::ChangedOnly)
         .with_http_only(false)
+        .with_same_site_policy(SameSite::Strict)
 }
 
 #[derive(Debug, Clone)]
@@ -63,7 +64,7 @@ SELECT value
 FROM user_sessions
 WHERE id = $1
             "#,
-            &id
+            id.as_str()
         )
         .fetch_optional(&mut db)
         .await?

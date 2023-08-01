@@ -1,0 +1,111 @@
+{
+  "db": "PostgreSQL",
+  "2576e00df7277d4c1bf5ed23bf01eba932db8104da0a89633052ab06524e17a1": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\nDELETE FROM user_sessions\nWHERE id = $1\n            "
+  },
+  "484df88c9bee2c5107f2dca07c1f7a63346431c3eefba163e2204cd71b9b98be": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\nDELETE FROM user_sessions\n            "
+  },
+  "4fb43f8d72e705a5ba8c7c1d2827141b056667065d19daf87869d6dc5cf5f076": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Varchar",
+          "Varchar"
+        ]
+      }
+    },
+    "query": "\nINSERT INTO user_sessions (id, value)\nVALUES($1, $2)\nON CONFLICT (id)\nDO\n    UPDATE SET value = $2\n            "
+  },
+  "54ad6e2dbc0f52961984df5ebaaae2271a717b044e684eb42c31f4555ff70410": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "name",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "created_at",
+          "ordinal": 2,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "last_updated_at",
+          "ordinal": 3,
+          "type_info": "Timestamptz"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Uuid"
+        ]
+      }
+    },
+    "query": "\nSELECT id, name, created_at, last_updated_at \nFROM todo_lists\nWHERE id = $1\n        "
+  },
+  "67328670c994b74c20fcd4beb70fbea6391852bb54c23caf17256be4e2770cf3": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Left": [
+          "Uuid",
+          "Text",
+          "Timestamptz",
+          "Timestamptz"
+        ]
+      }
+    },
+    "query": "\nINSERT INTO todo_lists (id, name, created_at, last_updated_at)\n    VALUES ($1, $2, $3, $4)\n    ON CONFLICT (id) DO\n        UPDATE SET name = $2,\n            created_at = $3,\n            last_updated_at = $4\n            "
+  },
+  "dd6a583d2d470d784302b97bf81c85c9ef620bd5f72f3b402ea16dd02dffa93a": {
+    "describe": {
+      "columns": [
+        {
+          "name": "value",
+          "ordinal": 0,
+          "type_info": "Varchar"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Left": [
+          "Text"
+        ]
+      }
+    },
+    "query": "\nSELECT value\nFROM user_sessions\nWHERE id = $1\n            "
+  }
+}

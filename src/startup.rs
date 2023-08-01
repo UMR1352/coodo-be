@@ -5,7 +5,7 @@ use sqlx::PgPool;
 
 use crate::{
     session::get_session_layer,
-    settings::{DbSettings, Settings},
+    settings::{DbSettings, Settings, TodoHandlerSettings},
     state::AppState,
 };
 
@@ -27,7 +27,7 @@ impl Application {
             TcpListener::bind(address)?
         };
 
-        let server = make_server(listener, db_pool.clone())?;
+        let server = make_server(listener, db_pool.clone(), &settings.todo_handler)?;
 
         Ok(Self {
             server,
@@ -42,7 +42,11 @@ impl Application {
     }
 }
 
-pub fn make_server(listener: TcpListener, db_pool: PgPool) -> anyhow::Result<Server> {
+pub fn make_server(
+    listener: TcpListener,
+    db_pool: PgPool,
+    settings: &TodoHandlerSettings,
+) -> anyhow::Result<Server> {
     use anyhow::Context;
     use tower_http::{
         catch_panic::CatchPanicLayer,
@@ -50,7 +54,7 @@ pub fn make_server(listener: TcpListener, db_pool: PgPool) -> anyhow::Result<Ser
     };
     use tracing::Level;
 
-    let state = AppState::new(db_pool.clone());
+    let state = AppState::new(db_pool.clone(), settings);
     let router = Router::new()
         .merge(crate::routes::router())
         .layer(CatchPanicLayer::new())
