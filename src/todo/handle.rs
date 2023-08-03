@@ -46,10 +46,18 @@ impl TodoListHandle {
         })
     }
 
-    pub fn connect(&mut self, user: Uuid) -> Option<(TodoListWatcher, TodoCommandSender)> {
+    pub fn get_connection(&mut self, user: Uuid) -> Option<(TodoListWatcher, TodoCommandSender)> {
         self.connected_users
             .insert(user)
             .then(|| (self.todo_watcher.clone(), self.command_tx.clone()))
+    }
+
+    pub fn disconnect_user(&mut self, user: Uuid) {
+        self.connected_users.remove(&user);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.connected_users.is_empty()
     }
 }
 

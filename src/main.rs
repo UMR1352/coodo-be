@@ -3,7 +3,7 @@ use coodo_be::{settings::get_settings, startup::Application, telemetry};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
-    telemetry::init();
+    telemetry::init_with_filter("info");
 
     let settings = get_settings().context("Failed to parse app settings")?;
     let app = Application::build(settings)

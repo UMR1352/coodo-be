@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::user::User;
+
 use super::list::{TodoList, TodoTask};
 
 pub trait Applicable {
@@ -18,6 +20,9 @@ pub struct TodoCommand {
 pub enum Command {
     TaskCommand(TaskCommandMeta),
     CreateTask,
+    UserJoin(User),
+    UserLeave(User),
+    SetListName(String),
 }
 
 impl Command {
@@ -34,6 +39,9 @@ impl Applicable for Command {
         match self {
             Command::TaskCommand(task_command) => task_command.apply(todo, issuer),
             Command::CreateTask => todo.add_task(TodoTask::new(issuer)),
+            Command::UserJoin(user) => todo.add_user(user),
+            Command::UserLeave(user) => todo.remove_user(*user.id()),
+            Command::SetListName(name) => todo.rename(name),
         }
     }
 }

@@ -2,12 +2,13 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Context;
 use coodo_be::todo::{Command, TaskCommandMeta, TodoList};
-use futures_util::SinkExt;
+use futures_util::{SinkExt, StreamExt};
 use reqwest::{cookie::Jar, Client};
 use sqlx::PgPool;
+use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::helpers::{StreamExtTimed, TestApp};
+use crate::helpers::TestApp;
 
 #[sqlx::test]
 async fn create_todo_without_session_returns_401(pool: PgPool) -> anyhow::Result<()> {
@@ -43,31 +44,35 @@ async fn todo_list_workflow_works(pool: PgPool) -> anyhow::Result<()> {
     let jar = Arc::new(Jar::default());
     let mut client = Client::builder().cookie_provider(jar.clone()).build()?;
 
-    let _user = app.get_user(&mut client).await?;
+    let user = app.get_user(&mut client).await?;
     let todo_list_id = app.create_todo_list(&mut client).await?;
     let (mut ws_sink, mut ws_stream) = app.connect_to_todo_list(todo_list_id, &jar).await?;
 
     let todo_list = {
-        let msg = ws_stream
-            .next_with_timeout(Duration::from_secs(3))
+        let msg = timeout(Duration::from_secs(1), ws_stream.next())
             .await
             .context("Timeout")?
+            .context("No message")?
             .context("Websocket error")?
             .into_data();
         serde_json::from_slice::<TodoList>(&msg[..]).context("Failed to deserialize todo list")?
     };
 
     assert_eq!(todo_list.id(), todo_list_id);
+    assert!(todo_list
+        .connected_users()
+        .get(0)
+        .is_some_and(|u| u.id() == user.id()));
 
     ws_sink
         .send(Message::Binary(serde_json::to_vec(&Command::CreateTask)?))
         .await?;
 
     let todo_list_updated = {
-        let msg = ws_stream
-            .next_with_timeout(Duration::from_secs(3))
+        let msg = timeout(Duration::from_secs(1), ws_stream.next())
             .await
             .context("Timeout")?
+            .context("Channel closed")?
             .context("Websocket error")?
             .into_data();
         serde_json::from_slice::<TodoList>(&msg[..]).context("Failed to deserialize todo list")?
@@ -85,10 +90,10 @@ async fn todo_list_workflow_works(pool: PgPool) -> anyhow::Result<()> {
         .await?;
 
     let todo_list_updated = {
-        let msg = ws_stream
-            .next_with_timeout(Duration::from_secs(3))
+        let msg = timeout(Duration::from_secs(1), ws_stream.next())
             .await
             .context("Timeout")?
+            .context("Channel closed")?
             .context("Websocket error")?
             .into_data();
         serde_json::from_slice::<TodoList>(&msg[..]).context("Failed to deserialize todo list")?

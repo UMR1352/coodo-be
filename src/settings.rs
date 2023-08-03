@@ -38,8 +38,10 @@ impl DbSettings {
     }
 
     pub fn with_db(&self) -> PgConnectOptions {
+        use tracing::log::LevelFilter;
+
         let mut options = self.without_db().database(&self.name);
-        options.log_statements(axum_sessions::async_session::log::LevelFilter::Trace);
+        options.log_statements(LevelFilter::Trace);
 
         options
     }

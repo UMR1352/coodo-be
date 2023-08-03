@@ -40,7 +40,7 @@ impl Default for UserHandleGenerator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct UserHandle(String);
 
 impl AsRef<str> for UserHandle {
@@ -65,7 +65,7 @@ impl UserHandle {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct User {
     id: Uuid,
     handle: UserHandle,

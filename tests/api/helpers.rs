@@ -1,16 +1,15 @@
-use core::task::Context as Ctx;
-use std::{net::TcpListener, pin::Pin, task::Poll, time::Duration};
+use std::{net::TcpListener, time::Duration};
 
 use anyhow::Context;
 use coodo_be::{settings::TodoHandlerSettings, telemetry, user::User};
 use futures_util::{
     stream::{SplitSink, SplitStream},
-    Future, Stream, StreamExt,
+    StreamExt,
 };
 use once_cell::sync::Lazy;
 use reqwest::{cookie::Jar, Client};
 use sqlx::PgPool;
-use tokio::{net::TcpStream, task::JoinHandle, time::Interval};
+use tokio::{net::TcpStream, task::JoinHandle};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use uuid::Uuid;
 
@@ -98,44 +97,6 @@ impl TestApp {
             .await
             .context("Failed to establish ws connection")?;
         Ok(ws_stream.split())
-    }
-}
-
-pub trait StreamExtTimed: StreamExt {
-    fn next_with_timeout(&mut self, timeout: Duration) -> TimedNext<'_, Self>
-    where
-        Self: Unpin,
-    {
-        TimedNext::new(self, timeout)
-    }
-}
-
-impl<T: ?Sized> StreamExtTimed for T where T: StreamExt {}
-
-pub struct TimedNext<'a, S: ?Sized> {
-    stream: &'a mut S,
-    timeout: Interval,
-}
-
-impl<S: ?Sized + Unpin> Unpin for TimedNext<'_, S> {}
-
-impl<'a, S: ?Sized + Stream + Unpin> TimedNext<'a, S> {
-    pub fn new(stream: &'a mut S, timeout: Duration) -> Self {
-        Self {
-            stream,
-            timeout: tokio::time::interval(timeout),
-        }
-    }
-}
-
-impl<S: ?Sized + Stream + Unpin> Future for TimedNext<'_, S> {
-    type Output = Option<S::Item>;
-
-    fn poll(mut self: Pin<&mut Self>, ctx: &mut Ctx<'_>) -> Poll<Self::Output> {
-        match self.timeout.poll_tick(ctx) {
-            Poll::Pending => self.stream.poll_next_unpin(ctx),
-            Poll::Ready(_) => Poll::Ready(None),
-        }
     }
 }
 

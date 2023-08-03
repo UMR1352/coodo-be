@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
+use crate::user::User;
+
 #[derive(Debug, serde::Serialize, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TodoList {
@@ -10,6 +12,7 @@ pub struct TodoList {
     tasks: Vec<TodoTask>,
     created_at: DateTime<Utc>,
     last_updated_at: DateTime<Utc>,
+    connected_users: Vec<User>,
 }
 
 impl Default for TodoList {
@@ -20,6 +23,7 @@ impl Default for TodoList {
             tasks: vec![],
             created_at: Utc::now(),
             last_updated_at: Utc::now(),
+            connected_users: vec![],
         }
     }
 }
@@ -60,11 +64,16 @@ WHERE id = $1
             tasks,
             created_at: record.created_at,
             last_updated_at: record.last_updated_at,
+            connected_users: vec![],
         })
     }
 
     pub const fn id(&self) -> Uuid {
         self.id
+    }
+
+    pub fn rename(&mut self, name: String) {
+        self.name = name;
     }
 
     fn update_time(&mut self) {
@@ -116,6 +125,18 @@ INSERT INTO todo_lists (id, name, created_at, last_updated_at)
         }
 
         Ok(())
+    }
+
+    pub fn connected_users(&self) -> &[User] {
+        &self.connected_users[..]
+    }
+
+    pub fn add_user(&mut self, user: User) {
+        self.connected_users.push(user);
+    }
+
+    pub fn remove_user(&mut self, id: Uuid) {
+        self.connected_users.retain(|user| user.id() != &id);
     }
 }
 

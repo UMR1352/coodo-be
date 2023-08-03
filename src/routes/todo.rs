@@ -41,6 +41,19 @@ async fn create_todo_list(
     Ok(Json(todo_list.id()))
 }
 
+// #[derive(Serialize, Debug)]
+// struct TodoListInfo {
+//     name: String,
+//     id: Uuid,
+// }
+
+// async fn get_users_todo_lists(
+//     session: ReadableSession,
+//     State(state): State<AppState>
+// ) -> Json<TodoListInfo> {
+
+// }
+
 async fn join_todo_list(
     session: ReadableSession,
     Path(todo_id): Path<Uuid>,
@@ -53,7 +66,9 @@ async fn join_todo_list(
         return (StatusCode::UNAUTHORIZED, "Establish a session first").into_response();
     };
     if let Ok((todo_watch, command_tx)) = state.join_todo_list(todo_id, *user.id()).await {
-        ws.on_upgrade(move |socket| ws_handler(socket, todo_id, todo_watch, command_tx, user))
+        ws.on_upgrade(move |socket| {
+            ws_handler(socket, state, todo_id, todo_watch, command_tx, user)
+        })
     } else {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -73,14 +88,24 @@ async fn join_todo_list(
 )]
 async fn ws_handler(
     ws: WebSocket,
+    state: AppState,
     todo_list_id: Uuid,
     mut todo: TodoListWatcher,
     command_tx: TodoCommandSender,
     user: User,
 ) {
     let (mut ws_tx, mut ws_rx) = ws.split();
-    if let Err(e) = send_todo_list(&mut todo, &mut ws_tx).await {
-        tracing::error!("{}", e);
+    if command_tx
+        .send(Command::UserJoin(user.clone()).with_issuer(*user.id()))
+        .await
+        .is_err()
+    {
+        tracing::error!(
+            "User {} failed to join todo list {}",
+            user.id(),
+            todo_list_id
+        );
+        return;
     }
 
     loop {
@@ -95,6 +120,9 @@ async fn ws_handler(
             },
             else => {
                 let _ = ws_tx.close().await;
+                let _ = command_tx.send(Command::UserLeave(user.clone()).with_issuer(*user.id())).await;
+                state.leave_todo_list(todo_list_id, *user.id()).await;
+
                 break;
             }
         }

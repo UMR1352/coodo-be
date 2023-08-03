@@ -46,7 +46,19 @@ impl AppState {
             .or_insert(
                 TodoListHandle::spawn(todo, self.db_pool.clone(), self.store_interval).await?,
             )
-            .connect(user_id)
+            .get_connection(user_id)
             .context("Failed to connect to given todo list")
+    }
+
+    pub async fn leave_todo_list(&self, todo: Uuid, user_id: Uuid) {
+        let mut todo_lists = self.todo_lists.write().await;
+        let mut empty = false;
+        if let Some(handle) = todo_lists.get_mut(&todo) {
+            handle.disconnect_user(user_id);
+            empty = handle.is_empty();
+        }
+        if empty {
+            todo_lists.remove(&todo);
+        }
     }
 }
