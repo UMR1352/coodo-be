@@ -4,15 +4,14 @@ use anyhow::Context;
 use coodo_be::todo::{Command, TaskCommandMeta, TodoList};
 use futures_util::{SinkExt, StreamExt};
 use reqwest::{cookie::Jar, Client};
-use sqlx::PgPool;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::helpers::TestApp;
 
-#[sqlx::test]
-async fn create_todo_without_session_returns_401(pool: PgPool) -> anyhow::Result<()> {
-    let app = TestApp::spawn(pool).await;
+#[tokio::test]
+async fn create_todo_without_session_returns_401() -> anyhow::Result<()> {
+    let app = TestApp::spawn().await;
     let client = Client::new();
 
     let response = client
@@ -24,23 +23,23 @@ async fn create_todo_without_session_returns_401(pool: PgPool) -> anyhow::Result
     Ok(())
 }
 
-#[sqlx::test]
-async fn create_todo_works(pool: PgPool) -> anyhow::Result<()> {
-    let app = TestApp::spawn(pool.clone()).await;
+#[tokio::test]
+async fn create_todo_works() -> anyhow::Result<()> {
+    let app = TestApp::spawn().await;
     let mut client = Client::builder().cookie_store(true).build()?;
 
     let _user = app.get_user(&mut client).await?;
     let todo_list_id = app.create_todo_list(&mut client).await?;
 
-    let todo_list = TodoList::from_db(todo_list_id, pool).await?;
+    let todo_list = TodoList::from_redis(todo_list_id, app.redis_pool()).await?;
     assert_eq!(todo_list_id, todo_list.id());
 
     Ok(())
 }
 
-#[sqlx::test]
-async fn todo_list_workflow_works(pool: PgPool) -> anyhow::Result<()> {
-    let app = TestApp::spawn(pool.clone()).await;
+#[tokio::test]
+async fn todo_list_workflow_works() -> anyhow::Result<()> {
+    let app = TestApp::spawn().await;
     let jar = Arc::new(Jar::default());
     let mut client = Client::builder().cookie_provider(jar.clone()).build()?;
 

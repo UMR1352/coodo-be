@@ -34,7 +34,7 @@ async fn create_todo_list(
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let todo_list = TodoList::default();
     todo_list
-        .store(state.db_pool())
+        .store(state.redis_pool())
         .await
         .expect("Failed to create todo list");
 

@@ -1,11 +1,10 @@
-use sqlx::PgPool;
+use deadpool_redis::Pool;
 use std::time::Duration;
-use tokio::time;
 use uuid::Uuid;
 
 use super::{
     command::{Applicable, TodoCommand},
-    TodoCommandReceiver, TodoListUpdater,
+    TodoCommandReceiver, TodoList, TodoListUpdater,
 };
 
 #[tracing::instrument(
@@ -17,39 +16,25 @@ pub async fn todo_list_task(
     todo_id: Uuid,
     updater: TodoListUpdater,
     mut commands: TodoCommandReceiver,
-    pool: PgPool,
-    store_interval: Duration,
+    pool: Pool,
+    _store_interval: Duration,
 ) {
     tracing::info!("Spawned successfully!");
-    let mut store_interval = time::interval(store_interval);
-    let mut dirty = false;
 
-    loop {
-        tokio::select! {
-            Some(command) = commands.recv() => {
-                tracing::debug!("Got command {:?}", &command);
-                updater.send_modify(|todo| {
-                    let TodoCommand {
-                        issuer,
-                        command,
-                    } = command;
-                    command.apply(todo, issuer);
-                });
-                dirty = true;
-            },
-            _ = store_interval.tick() => {
-                if dirty {
-                    let current_todo = {(*updater.borrow()).clone()};
-                    match current_todo.store(pool.clone()).await {
-                        Ok(_) => {
-                            tracing::debug!("Successfully stored to db");
-                            dirty = false;
-                        },
-                        Err(_) => tracing::warn!("Couldn't store to db"),
-                    }
-                }
-            },
-            else => break,
-        }
+    while let Some(command) = commands.recv().await {
+        tracing::debug!("Got command {:?}", &command);
+        updater.send_modify(|todo| {
+            let TodoCommand { issuer, command } = command;
+            command.apply(todo, issuer);
+        });
+
+        let current_state = updater.borrow().clone();
+        store_todo_list(current_state, pool.clone()).await;
+    }
+}
+
+async fn store_todo_list(todo_list: TodoList, pool: Pool) {
+    if todo_list.store(pool).await.is_err() {
+        tracing::warn!("Failed to store todo list");
     }
 }

@@ -1,12 +1,12 @@
+use deadpool_redis::ConnectionInfo;
 use serde::Deserialize;
 use serde_aux::prelude::deserialize_number_from_string;
 use serde_with::{serde_as, DurationSeconds};
-use sqlx::{postgres::PgConnectOptions, ConnectOptions};
 use std::time::Duration;
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
-    pub db: DbSettings,
+    pub redis: RedisSettings,
     pub app: AppSettings,
     pub todo_handler: TodoHandlerSettings,
 }
@@ -19,31 +19,30 @@ pub struct TodoHandlerSettings {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct DbSettings {
+pub struct RedisSettings {
     pub host: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub username: String,
     pub password: String,
-    pub name: String,
+    pub db: i64,
 }
 
-impl DbSettings {
-    pub fn without_db(&self) -> PgConnectOptions {
-        PgConnectOptions::new()
-            .host(&self.host)
-            .username(&self.username)
-            .password(&self.password)
-            .port(self.port)
-    }
+impl From<RedisSettings> for ConnectionInfo {
+    fn from(value: RedisSettings) -> Self {
+        use deadpool_redis::{ConnectionAddr, RedisConnectionInfo};
 
-    pub fn with_db(&self) -> PgConnectOptions {
-        use tracing::log::LevelFilter;
+        let addr = ConnectionAddr::Tcp(value.host, value.port);
+        let connection_info = RedisConnectionInfo {
+            db: value.db,
+            username: Some(value.username),
+            password: Some(value.password),
+        };
 
-        let mut options = self.without_db().database(&self.name);
-        options.log_statements(LevelFilter::Trace);
-
-        options
+        Self {
+            redis: connection_info,
+            addr,
+        }
     }
 }
 

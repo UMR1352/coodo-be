@@ -3,7 +3,7 @@ use std::{collections::HashSet, time::Duration};
 use super::{list::TodoList, task::todo_list_task, TodoCommandSender, TodoListWatcher};
 
 use anyhow::Context;
-use sqlx::PgPool;
+use deadpool_redis::Pool;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -18,12 +18,12 @@ pub struct TodoListHandle {
 impl TodoListHandle {
     pub async fn spawn(
         list_id: Uuid,
-        pool: PgPool,
+        pool: Pool,
         store_interval: Duration,
     ) -> anyhow::Result<Self> {
         use tokio::sync::{mpsc, watch};
 
-        let todo_list = TodoList::from_db(list_id, pool.clone())
+        let todo_list = TodoList::from_redis(list_id, pool.clone())
             .await
             .context("Failed to retrieve todo list from db")?;
 

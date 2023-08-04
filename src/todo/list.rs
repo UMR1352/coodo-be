@@ -1,10 +1,14 @@
+use anyhow::Context;
 use chrono::{DateTime, Utc};
-use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
+use deadpool_redis::Pool;
+use redis::JsonAsyncCommands;
+use redis_macros::{FromRedisValue, ToRedisArgs};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::user::User;
 
-#[derive(Debug, serde::Serialize, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRedisValue, ToRedisArgs)]
 #[serde(rename_all = "camelCase")]
 pub struct TodoList {
     id: Uuid,
@@ -36,36 +40,12 @@ impl TodoList {
         }
     }
 
-    pub async fn from_db(id: Uuid, pool: PgPool) -> sqlx::Result<Self> {
-        let mut db_conn = pool.acquire().await?;
-        let tasks = sqlx::query_as::<_, TodoTask>(
-            r#"
-SELECT id, name, assignee, done
-FROM todo_tasks
-WHERE list = $1
-            "#,
-        )
-        .bind(id)
-        .fetch_all(&mut db_conn)
-        .await?;
-        sqlx::query!(
-            r#"
-SELECT id, name, created_at, last_updated_at 
-FROM todo_lists
-WHERE id = $1
-        "#,
-            id
-        )
-        .fetch_one(&mut db_conn)
-        .await
-        .map(|record| Self {
-            id: record.id,
-            name: record.name,
-            tasks,
-            created_at: record.created_at,
-            last_updated_at: record.last_updated_at,
-            connected_users: vec![],
-        })
+    pub async fn from_redis(id: Uuid, pool: Pool) -> anyhow::Result<Self> {
+        let mut redis = pool.get().await?;
+        redis
+            .json_get(id.to_string(), "$")
+            .await
+            .context("Failed to retrieve todo list")
     }
 
     pub const fn id(&self) -> Uuid {
@@ -98,32 +78,9 @@ WHERE id = $1
         self.tasks.iter_mut().find(|task| task.id() == id)
     }
 
-    pub async fn store(&self, pool: PgPool) -> sqlx::Result<()> {
-        let mut db_conn = pool.acquire().await?;
-        sqlx::query!(
-            r#"
-INSERT INTO todo_lists (id, name, created_at, last_updated_at)
-    VALUES ($1, $2, $3, $4)
-    ON CONFLICT (id) DO
-        UPDATE SET name = $2,
-            created_at = $3,
-            last_updated_at = $4
-            "#,
-            self.id,
-            &self.name,
-            self.created_at,
-            self.last_updated_at
-        )
-        .execute(&mut db_conn)
-        .await?;
-
-        if !self.tasks.is_empty() {
-            tasks_upsert_query(self.tasks.iter())
-                .build()
-                .execute(&mut db_conn)
-                .await?;
-        }
-
+    pub async fn store(&self, pool: Pool) -> anyhow::Result<()> {
+        let mut redis = pool.get().await?;
+        redis.json_set(self.id.to_string(), "$", self).await?;
         Ok(())
     }
 
@@ -140,7 +97,7 @@ INSERT INTO todo_lists (id, name, created_at, last_updated_at)
     }
 }
 
-#[derive(Debug, Clone, FromRow, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToRedisArgs, FromRedisValue)]
 pub struct TodoTask {
     id: Uuid,
     name: String,
@@ -185,27 +142,4 @@ impl TodoTask {
     pub fn rename(&mut self, name: String) {
         self.name = name;
     }
-}
-
-fn tasks_upsert_query<'list>(
-    tasks: impl Iterator<Item = &'list TodoTask>,
-) -> QueryBuilder<'list, Postgres> {
-    let mut builder = sqlx::QueryBuilder::new("INSERT INTO todo_tasks (id, name, assignee, done) ");
-    builder
-        .push_values(tasks, |mut b, task| {
-            b.push_bind(task.id)
-                .push_bind(task.name())
-                .push_bind(task.assignee)
-                .push_bind(task.done);
-        })
-        .push(
-            r#"
-ON CONFLICT (id) DO
-    UPDATE SET name = EXCLUDED.name,
-        assignee = EXCLUDED.assignee,
-        done = EXCLUDED.done,
-    "#,
-        );
-
-    builder
 }
