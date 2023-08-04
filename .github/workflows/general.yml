@@ -15,8 +15,8 @@ env:
   REDIS_PASSWORD: supa_password
   REDIS_PORT: 6379
   REDIS_ARGS: |
-    --requirepass ${{ env.REDIS_PASSWORD }} \
-    --user ${{ env.REDIS_USER }} on >${{ env.REDIS_PASSWORD }} allkeys allcommands \
+    --requirepass $REDIS_PASSWORD \
+    --user $REDIS_USER on >$REDIS_PASSWORD allkeys allcommands \
     --user default off nopass nocommands
 
 jobs:
@@ -27,9 +27,9 @@ jobs:
       redis:
         image: redis/redis-stack-server:7.0.6-RC9
         env:
-          REDIS_ARGS: ${{ env.REDIS_ARGS }}
+          REDIS_ARGS: $REDIS_ARGS
         ports:
-          - ${{ env.REDIS_PORT }}:6379
+          - $env.REDIS_PORT:6379
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -59,9 +59,9 @@ jobs:
       redis:
         image: redis/redis-stack-server:7.0.6-RC9
         env:
-          REDIS_ARGS: ${{ env.REDIS_ARGS }}
+          REDIS_ARGS: $REDIS_ARGS
         ports:
-          - ${{ env.REDIS_PORT }}:6379
+          - $REDIS_PORT:6379
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -82,9 +82,9 @@ jobs:
       redis:
         image: redis/redis-stack-server:7.0.6-RC9
         env:
-          REDIS_ARGS: ${{ env.REDIS_ARGS }}
+          REDIS_ARGS: $REDIS_ARGS
         ports:
-          - ${{ env.REDIS_PORT }}:6379
+          - $REDIS_PORT:6379
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
