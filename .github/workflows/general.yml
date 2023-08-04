@@ -11,10 +11,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  REDIS_USER: emarconi
-  REDIS_PASSWORD: supa_password
-  REDIS_PORT: 6379
-  REDIS_ARGS: --requirepass supa_password --user emarconi on >supa_password allkeys allcommands --user default off nopass nocommands
 
 jobs:
   test:
@@ -24,9 +20,9 @@ jobs:
       redis:
         image: redis/redis-stack-server:7.0.6-RC9
         env:
-          REDIS_ARGS: ${{ env.REDIS_ARGS }}
+          REDIS_ARGS: "--requirepass ${{ secrets.REDIS_PASSWORD }} --user ${{ secrets.REDIS_USER }} on >${{ secrets.REDIS_PASSWORD}} allkeys allcommands --user default off nopass nocommands"
         ports:
-          - ${{ env.REDIS_PORT }}:6379
+          - 6379:6379
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -56,9 +52,9 @@ jobs:
       redis:
         image: redis/redis-stack-server:7.0.6-RC9
         env:
-          REDIS_ARGS: ${{ env.REDIS_ARGS }}
+          REDIS_ARGS: "--requirepass ${{ secrets.REDIS_PASSWORD }} --user ${{ secrets.REDIS_USER }} on >${{ secrets.REDIS_PASSWORD}} allkeys allcommands --user default off nopass nocommands"
         ports:
-          - ${{ env.REDIS_PORT }}:6379
+          - 6379:6379
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
@@ -79,9 +75,9 @@ jobs:
       redis:
         image: redis/redis-stack-server:7.0.6-RC9
         env:
-          REDIS_ARGS: ${{ env.REDIS_ARGS }}
+          REDIS_ARGS: "--requirepass ${{ secrets.REDIS_PASSWORD }} --user ${{ secrets.REDIS_USER }} on >${{ secrets.REDIS_PASSWORD}} allkeys allcommands --user default off nopass nocommands"
         ports:
-          - ${{ env.REDIS_PORT }}:6379
+          - 6379:6379
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
