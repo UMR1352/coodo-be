@@ -5,17 +5,18 @@ use axum::{
         Path, State,
     },
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
-use axum_sessions::extractors::ReadableSession;
+use axum_sessions::extractors::{ReadableSession, WritableSession};
 use futures_util::{stream::SplitSink, SinkExt, StreamExt};
 use hyper::StatusCode;
 use uuid::Uuid;
 
 use crate::{
+    session::TodoSessionExt,
     state::AppState,
-    todo::{Command, TodoCommandSender, TodoList, TodoListWatcher},
+    todo::{Command, TodoCommandSender, TodoList, TodoListInfo, TodoListWatcher},
     user::User,
 };
 
@@ -23,16 +24,19 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/todos/:id", get(join_todo_list))
         .route("/todos", post(create_todo_list))
+        .route("/todos", get(get_users_todo_lists))
+        .route("/todos/:id", delete(leave_todo_list))
 }
 
 async fn create_todo_list(
-    session: ReadableSession,
+    mut session: WritableSession,
     State(state): State<AppState>,
 ) -> Result<Json<Uuid>, StatusCode> {
     let _user = session
         .get::<User>("user")
         .ok_or(StatusCode::UNAUTHORIZED)?;
     let todo_list = TodoList::default();
+    session.join_todo_list(&todo_list);
     todo_list
         .store(state.redis_pool())
         .await
@@ -41,38 +45,36 @@ async fn create_todo_list(
     Ok(Json(todo_list.id()))
 }
 
-// #[derive(Serialize, Debug)]
-// struct TodoListInfo {
-//     name: String,
-//     id: Uuid,
-// }
+async fn get_users_todo_lists(session: ReadableSession) -> Json<Vec<TodoListInfo<'static>>> {
+    session
+        .get::<Vec<TodoListInfo>>("user_lists")
+        .map(Json)
+        .unwrap_or_default()
+}
 
-// async fn get_users_todo_lists(
-//     session: ReadableSession,
-//     State(state): State<AppState>
-// ) -> Json<TodoListInfo> {
-
-// }
+async fn leave_todo_list(mut session: WritableSession, Path(todo_id): Path<Uuid>) {
+    session.leave_todo_list(todo_id);
+}
 
 async fn join_todo_list(
-    session: ReadableSession,
+    mut session: WritableSession,
     Path(todo_id): Path<Uuid>,
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
 ) -> Response {
-    let user = if let Some(user) = session.get::<User>("user") {
-        user
-    } else {
+    let Some(user) = session.get::<User>("user") else {
         return (StatusCode::UNAUTHORIZED, "Establish a session first").into_response();
     };
     if let Ok((todo_watch, command_tx)) = state.join_todo_list(todo_id, *user.id()).await {
+        session.join_todo_list(&todo_watch.borrow());
+
         ws.on_upgrade(move |socket| {
             ws_handler(socket, state, todo_id, todo_watch, command_tx, user)
         })
     } else {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to join requeste todo list",
+            "Failed to join requested todo list",
         )
             .into_response()
     }
@@ -118,15 +120,15 @@ async fn ws_handler(
             Ok(()) = todo.changed() => {
                 let _ = send_todo_list(&mut todo, &mut ws_tx).await;
             },
-            else => {
-                let _ = ws_tx.close().await;
-                let _ = command_tx.send(Command::UserLeave(user.clone()).with_issuer(*user.id())).await;
-                state.leave_todo_list(todo_list_id, *user.id()).await;
-
-                break;
-            }
+            else => break,
         }
     }
+
+    let _ = ws_tx.close().await;
+    let _ = command_tx
+        .send(Command::UserLeave(user.clone()).with_issuer(*user.id()))
+        .await;
+    state.leave_todo_list(todo_list_id, *user.id()).await;
 }
 
 async fn send_todo_list(

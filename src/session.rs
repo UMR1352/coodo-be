@@ -3,9 +3,13 @@ use std::fmt::Debug;
 use axum::async_trait;
 use axum_sessions::{
     async_session::{self, Session, SessionStore},
+    extractors::WritableSession,
     SessionLayer,
 };
 use deadpool_redis::{Connection, Pool, PoolError};
+use uuid::Uuid;
+
+use crate::todo::{TodoList, TodoListInfo};
 
 pub fn get_session_layer(redis_pool: Pool) -> SessionLayer<UserSessionStore> {
     use axum_sessions::{PersistencePolicy, SameSite};
@@ -118,5 +122,35 @@ impl SessionStore for UserSessionStore {
             .await?;
 
         Ok(())
+    }
+}
+
+pub trait TodoSessionExt {
+    fn join_todo_list(&mut self, list: &TodoList);
+    fn leave_todo_list(&mut self, id: Uuid);
+}
+
+impl TodoSessionExt for WritableSession {
+    fn join_todo_list(&mut self, list: &TodoList) {
+        let mut user_lists = self
+            .get::<Vec<TodoListInfo>>("user_lists")
+            .unwrap_or_default();
+
+        if !user_lists.iter().any(|td| td.id() == list.id()) {
+            user_lists.push(list.as_info());
+            if self.insert("user_lists", user_lists).is_err() {
+                tracing::error!("Failed to update user session");
+            }
+        }
+    }
+
+    fn leave_todo_list(&mut self, id: Uuid) {
+        let mut user_lists = self
+            .get::<Vec<TodoListInfo>>("user_lists")
+            .unwrap_or_default();
+        user_lists.retain(|list| list.id() != id);
+        if self.insert("user_lists", user_lists).is_err() {
+            tracing::error!("Failed to update user session");
+        }
     }
 }

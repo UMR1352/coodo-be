@@ -1,7 +1,7 @@
 use std::net::TcpListener;
 
 use anyhow::Context;
-use coodo_be::{startup::get_redis_pool, telemetry, user::User};
+use coodo_be::{startup::get_redis_pool, telemetry, todo::TodoListInfo, user::User};
 use deadpool_redis::Pool;
 use futures_util::{
     stream::{SplitSink, SplitStream},
@@ -106,6 +106,20 @@ impl TestApp {
             .await
             .context("Failed to establish ws connection")?;
         Ok(ws_stream.split())
+    }
+
+    pub async fn get_joined_todo_lists(
+        &self,
+        client: &Client,
+    ) -> anyhow::Result<Vec<TodoListInfo>> {
+        client
+            .get(format!("{}/todos", self.address))
+            .send()
+            .await
+            .context("Failed to send GET /todos")?
+            .json::<Vec<TodoListInfo>>()
+            .await
+            .context("Failed to parse response")
     }
 }
 

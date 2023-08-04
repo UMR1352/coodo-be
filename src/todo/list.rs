@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use deadpool_redis::Pool;
@@ -7,6 +9,22 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::user::User;
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+pub struct TodoListInfo<'t> {
+    name: Cow<'t, str>,
+    id: Uuid,
+}
+
+impl<'t> TodoListInfo<'t> {
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRedisValue, ToRedisArgs)]
 #[serde(rename_all = "camelCase")]
@@ -52,6 +70,10 @@ impl TodoList {
         self.id
     }
 
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn rename(&mut self, name: String) {
         self.name = name;
     }
@@ -94,6 +116,13 @@ impl TodoList {
 
     pub fn remove_user(&mut self, id: Uuid) {
         self.connected_users.retain(|user| user.id() != &id);
+    }
+
+    pub fn as_info(&self) -> TodoListInfo<'_> {
+        TodoListInfo {
+            id: self.id,
+            name: Cow::Borrowed(self.name()),
+        }
     }
 }
 

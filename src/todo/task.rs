@@ -27,14 +27,11 @@ pub async fn todo_list_task(
             let TodoCommand { issuer, command } = command;
             command.apply(todo, issuer);
         });
-
-        let current_state = updater.borrow().clone();
-        store_todo_list(current_state, pool.clone()).await;
     }
-}
 
-async fn store_todo_list(todo_list: TodoList, pool: Pool) {
+    tracing::info!("Closing todo list");
+    let todo_list = updater.send_replace(TodoList::default());
     if todo_list.store(pool).await.is_err() {
-        tracing::warn!("Failed to store todo list");
+        tracing::error!("Failed to store list!")
     }
 }
