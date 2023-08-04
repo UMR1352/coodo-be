@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::Context;
-use sqlx::{pool::PoolConnection, PgPool, Postgres};
+use deadpool_redis::Pool;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -10,28 +10,24 @@ use crate::{
     todo::{TodoCommandSender, TodoListHandle, TodoListWatcher},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AppState {
-    db_pool: PgPool,
+    redis_pool: Pool,
     todo_lists: Arc<RwLock<HashMap<Uuid, TodoListHandle>>>,
     store_interval: Duration,
 }
 
 impl AppState {
-    pub fn new(db_pool: PgPool, config: &TodoHandlerSettings) -> Self {
+    pub fn new(redis_pool: Pool, config: &TodoHandlerSettings) -> Self {
         Self {
-            db_pool,
+            redis_pool,
             todo_lists: Arc::new(RwLock::new(HashMap::default())),
             store_interval: config.store_interval,
         }
     }
 
-    pub async fn db_connection(&self) -> sqlx::Result<PoolConnection<Postgres>> {
-        self.db_pool.acquire().await
-    }
-
-    pub fn db_pool(&self) -> PgPool {
-        self.db_pool.clone()
+    pub fn redis_pool(&self) -> Pool {
+        self.redis_pool.clone()
     }
 
     pub async fn join_todo_list(
@@ -44,7 +40,7 @@ impl AppState {
             .await
             .entry(todo)
             .or_insert(
-                TodoListHandle::spawn(todo, self.db_pool.clone(), self.store_interval).await?,
+                TodoListHandle::spawn(todo, self.redis_pool.clone(), self.store_interval).await?,
             )
             .get_connection(user_id)
             .context("Failed to connect to given todo list")

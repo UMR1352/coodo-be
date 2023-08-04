@@ -1,14 +1,15 @@
-use std::{net::TcpListener, time::Duration};
+use std::net::TcpListener;
 
 use anyhow::Context;
-use coodo_be::{settings::TodoHandlerSettings, telemetry, user::User};
+use coodo_be::{startup::get_redis_pool, telemetry, user::User};
+use deadpool_redis::Pool;
 use futures_util::{
     stream::{SplitSink, SplitStream},
     StreamExt,
 };
 use once_cell::sync::Lazy;
+use rand::Rng;
 use reqwest::{cookie::Jar, Client};
-use sqlx::PgPool;
 use tokio::{net::TcpStream, task::JoinHandle};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 use uuid::Uuid;
@@ -26,31 +27,39 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 pub struct TestApp {
     pub address: String,
     pub port: u16,
-    _pool: PgPool,
+    pool: Pool,
     _server_handle: JoinHandle<hyper::Result<()>>,
 }
 
 impl TestApp {
     #[tracing::instrument(skip_all)]
-    pub async fn spawn(pool: PgPool) -> Self {
+    pub async fn spawn() -> Self {
         Lazy::force(&TRACING);
 
-        let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
+        let settings = coodo_be::settings::get_settings().expect("Failed to read config file");
+        let mut redis_settings = settings.redis;
+        redis_settings.db = rand::thread_rng().gen_range(1..15);
+        let pool = get_redis_pool(redis_settings);
+
+        let listener = TcpListener::bind(format!("{}:0", settings.app.host))
+            .expect("Failed to bind random port");
         let port = listener.local_addr().unwrap().port();
         let address = format!("http://127.0.0.1:{}", port);
-        let todo_handler_settings = TodoHandlerSettings {
-            store_interval: Duration::from_secs(1),
-        };
-        let server = coodo_be::startup::make_server(listener, pool.clone(), &todo_handler_settings)
+
+        let server = coodo_be::startup::make_server(listener, pool.clone(), &settings.todo_handler)
             .expect("Failed to create server");
         let server_handle = tokio::spawn(server);
 
         Self {
             address,
             port,
-            _pool: pool,
+            pool,
             _server_handle: server_handle,
         }
+    }
+
+    pub fn redis_pool(&self) -> Pool {
+        self.pool.clone()
     }
 
     pub async fn get_user(&self, client: &mut Client) -> anyhow::Result<User> {

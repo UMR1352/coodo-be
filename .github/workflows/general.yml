@@ -11,42 +11,33 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  SQLX_VERSION: 0.6.3
-  SQLX_FEATURES: "rustls,postgres"
+  REDIS_USER: emarconi
+  REDIS_PASSWORD: supa_password
+  REDIS_PORT: 6379
+  REDIS_ARGS: |
+    --requirepass ${{ env.REDIS_PASSWORD }} \
+    --user ${{ env.REDIS_USER }} on >${{ env.REDIS_PASSWORD }} allkeys allcommands \
+    --user default off nopass nocommands
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
     services:
-      postgres:
-        image: postgres:15
+      redis:
+        image: redis/redis-stack-server:7.0.6-RC9
         env:
-          POSTGRES_USER: emarconi
-          POSTGRES_PASSWORD: supa_password
-          POSTGRES_DB: todo
+          REDIS_ARGS: ${{ env.REDIS_ARGS }}
         ports:
-          - 5432:5432
+          - ${{ env.REDIS_PORT }}:6379
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-        with:
-          key: sqlx-${{ env.SQLX_VERSION }}
-      - name: Install sqlx-cli
-        run:
-            cargo install sqlx-cli
-            --version=${{ env.SQLX_VERSION }}
-            --features ${{ env.SQLX_FEATURES }}
-            --no-default-features
-            --locked
-      - name: Migrate database
+      - name: Feed redis scripts
         run: |
           sudo apt-get install libpq-dev -y
-          SKIP_DOCKER=true ./scripts/init_db.sh
-      - name: Check sqlx-data.json is up-to-date
-        run: |
-          cargo sqlx prepare --database-url postgres://emarconi:supa_password@localhost/todo --check -- --all-targets
+          SKIP_DOCKER=true ./scripts/run_redis.sh
       - name: Run tests
         run: cargo test
 
@@ -65,33 +56,22 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     services:
-      postgres:
-        image: postgres:15
+      redis:
+        image: redis/redis-stack-server:7.0.6-RC9
         env:
-          POSTGRES_USER: emarconi
-          POSTGRES_PASSWORD: supa_password
-          POSTGRES_DB: todo
+          REDIS_ARGS: ${{ env.REDIS_ARGS }}
         ports:
-          - 5432:5432
+          - ${{ env.REDIS_PORT }}:6379
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-        with:
-          key: sqlx-${{ env.SQLX_VERSION }}
-      - name: Install sqlx-cli
-        run:
-          cargo install sqlx-cli
-            --version=${{ env.SQLX_VERSION }}
-            --features ${{ env.SQLX_FEATURES }}
-            --no-default-features
-            --locked
-      - name: Migrate database
+      - name: Feed redis scripts
         run: |
           sudo apt-get install libpq-dev -y
-          SKIP_DOCKER=true ./scripts/init_db.sh
+          SKIP_DOCKER=true ./scripts/run_redis.sh
       - name: Linting
         run: cargo clippy -- -D warnings
 
@@ -99,14 +79,12 @@ jobs:
     name: Code coverage
     runs-on: ubuntu-latest
     services:
-      postgres:
-        image: postgres:15
+      redis:
+        image: redis/redis-stack-server:7.0.6-RC9
         env:
-          POSTGRES_USER: emarconi
-          POSTGRES_PASSWORD: supa_password
-          POSTGRES_DB: todo
+          REDIS_ARGS: ${{ env.REDIS_ARGS }}
         ports:
-          - 5432:5432
+          - ${{ env.REDIS_PORT }}:6379
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -114,18 +92,9 @@ jobs:
       - name: Install libpq
         run: sudo apt-get update && sudo apt-get install postgresql-client -y
       - uses: Swatinem/rust-cache@v2
-        with:
-          key: sqlx-${{ env.SQLX_VERSION }}
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
-      - name: Install sqlx-cli
-        run:
-          cargo install sqlx-cli
-          --version=${{ env.SQLX_VERSION }}
-          --features ${{ env.SQLX_FEATURES }}
-          --no-default-features
-          --locked
-      - name: Migrate database
-        run: SKIP_DOCKER=true ./scripts/init_db.sh
+      - name: Feed redis scripts
+        run: SKIP_DOCKER=true ./scripts/run_redis.sh
       - name: Generate code coverage
         run: cargo tarpaulin --verbose --workspace
