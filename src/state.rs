@@ -51,10 +51,12 @@ impl AppState {
         let mut empty = false;
         if let Some(handle) = todo_lists.get_mut(&todo) {
             handle.disconnect_user(user_id);
+            tracing::debug!("User {user_id} has left TodoList {todo}");
             empty = handle.is_empty();
         }
         if empty {
             todo_lists.remove(&todo);
+            tracing::debug!("TodoList {todo} has no user connected and has been docked");
         }
     }
 }

@@ -56,6 +56,11 @@ async fn leave_todo_list(mut session: WritableSession, Path(todo_id): Path<Uuid>
     session.leave_todo_list(todo_id);
 }
 
+#[tracing::instrument(
+    name = "TodoList connect"
+    skip_all,
+    fields(todo = %todo_id)
+)]
 async fn join_todo_list(
     mut session: WritableSession,
     Path(todo_id): Path<Uuid>,
@@ -113,6 +118,9 @@ async fn ws_handler(
     loop {
         tokio::select! {
             Some(Ok(msg)) = ws_rx.next() => {
+                if matches!(msg, Message::Close(_)) {
+                    break;
+                }
                 if let Ok(command) = serde_json::from_slice::<Command>(msg.into_data().as_slice()) {
                     let _ = command_tx.send(command.with_issuer(*user.id())).await;
                 }
@@ -129,6 +137,7 @@ async fn ws_handler(
         .send(Command::UserLeave(user.clone()).with_issuer(*user.id()))
         .await;
     state.leave_todo_list(todo_list_id, *user.id()).await;
+    tracing::debug!("WS connection closed");
 }
 
 async fn send_todo_list(

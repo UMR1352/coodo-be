@@ -11,7 +11,7 @@ use uuid::Uuid;
 pub struct TodoListHandle {
     command_tx: TodoCommandSender,
     todo_watcher: TodoListWatcher,
-    task_handle: JoinHandle<()>,
+    _task_handle: JoinHandle<()>,
     connected_users: HashSet<Uuid>,
 }
 
@@ -41,7 +41,7 @@ impl TodoListHandle {
         Ok(Self {
             command_tx,
             todo_watcher: watch_rx,
-            task_handle,
+            _task_handle: task_handle,
             connected_users: HashSet::default(),
         })
     }
@@ -58,11 +58,5 @@ impl TodoListHandle {
 
     pub fn is_empty(&self) -> bool {
         self.connected_users.is_empty()
-    }
-}
-
-impl Drop for TodoListHandle {
-    fn drop(&mut self) {
-        self.task_handle.abort();
     }
 }

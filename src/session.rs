@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use anyhow::Context;
 use axum::async_trait;
 use axum_sessions::{
     async_session::{self, Session, SessionStore},
@@ -76,7 +77,8 @@ impl SessionStore for UserSessionStore {
             .arg(&id)
             .query_async::<_, String>(&mut redis)
             .await
-            .map(|session| serde_json::from_str(&session).unwrap())?;
+            .map(|session| serde_json::from_str(&session).unwrap())
+            .context("Failed to load session")?;
 
         Ok(session)
     }
@@ -91,7 +93,8 @@ impl SessionStore for UserSessionStore {
             .arg(session.id())
             .arg(&serde_json::to_string(&session)?)
             .query_async(&mut redis)
-            .await?;
+            .await
+            .context("Failed to store session")?;
 
         session.reset_data_changed();
         Ok(session.into_cookie_value())
