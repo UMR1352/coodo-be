@@ -1,0 +1,9 @@
+app:
+  host: 0.0.0.0
+  port: 8080
+redis:
+  host: "redis"
+  port: 6379
+  db: 0
+  username: "emarconi"
+  password: "supa_password"

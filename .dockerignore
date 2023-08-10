@@ -1,0 +1,6 @@
+.github/
+migrations/
+scripts/
+target/
+.session_secret
+.gitignore

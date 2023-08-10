@@ -45,11 +45,17 @@ async fn create_todo_list(
     Ok(Json(todo_list.id()))
 }
 
-async fn get_users_todo_lists(session: ReadableSession) -> Json<Vec<TodoListInfo<'static>>> {
-    session
+async fn get_users_todo_lists(
+    session: ReadableSession,
+    State(state): State<AppState>,
+) -> Json<Vec<TodoListInfo<'static>>> {
+    let mut joined_lists = session
         .get::<Vec<TodoListInfo>>("user_lists")
-        .map(Json)
-        .unwrap_or_default()
+        .unwrap_or_default();
+
+    state.fill_todo_lists_info(&mut joined_lists).await;
+
+    Json(joined_lists)
 }
 
 async fn leave_todo_list(mut session: WritableSession, Path(todo_id): Path<Uuid>) {
@@ -103,7 +109,7 @@ async fn ws_handler(
 ) {
     let (mut ws_tx, mut ws_rx) = ws.split();
     if command_tx
-        .send(Command::UserJoin(user.clone()).with_issuer(*user.id()))
+        .send(Command::UserJoin(user.clone()).with_issuer(user.clone()))
         .await
         .is_err()
     {
@@ -122,7 +128,7 @@ async fn ws_handler(
                     break;
                 }
                 if let Ok(command) = serde_json::from_slice::<Command>(msg.into_data().as_slice()) {
-                    let _ = command_tx.send(command.with_issuer(*user.id())).await;
+                    let _ = command_tx.send(command.with_issuer(user.clone())).await;
                 }
             },
             Ok(()) = todo.changed() => {
@@ -134,7 +140,7 @@ async fn ws_handler(
 
     let _ = ws_tx.close().await;
     let _ = command_tx
-        .send(Command::UserLeave(user.clone()).with_issuer(*user.id()))
+        .send(Command::UserLeave(user.clone()).with_issuer(user.clone()))
         .await;
     state.leave_todo_list(todo_list_id, *user.id()).await;
     tracing::debug!("WS connection closed");
@@ -144,12 +150,12 @@ async fn send_todo_list(
     todo_list: &mut TodoListWatcher,
     ws_sink: &mut SplitSink<WebSocket, Message>,
 ) -> anyhow::Result<()> {
-    let bytes = {
+    let json_msg = {
         let todo_list = &*todo_list.borrow_and_update();
-        serde_json::to_vec(&todo_list).context("Failed to serialize todo list")?
+        serde_json::to_string(&todo_list).context("Failed to serialize todo list")?
     };
     ws_sink
-        .send(Message::Binary(bytes))
+        .send(Message::Text(json_msg))
         .await
         .context("Failed to send ws message")?;
 

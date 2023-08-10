@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::user::User;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct TodoListInfo<'t> {
     name: Cow<'t, str>,
     id: Uuid,
@@ -23,6 +23,23 @@ impl<'t> TodoListInfo<'t> {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn id_mut(&mut self) -> &mut Uuid {
+        &mut self.id
+    }
+
+    pub fn set_name<S: ToOwned<Owned = String>>(&mut self, name: S) {
+        self.name = Cow::Owned(name.to_owned())
+    }
+}
+
+impl TodoListInfo<'static> {
+    pub fn new_owned(id: Uuid, name: String) -> Self {
+        Self {
+            id,
+            name: Cow::Owned(name),
+        }
     }
 }
 
@@ -130,12 +147,12 @@ impl TodoList {
 pub struct TodoTask {
     id: Uuid,
     name: String,
-    assignee: Uuid,
+    assignee: User,
     done: bool,
 }
 
 impl TodoTask {
-    pub fn new(assignee: Uuid) -> Self {
+    pub fn new(assignee: User) -> Self {
         Self {
             id: Uuid::new_v4(),
             name: String::new(),
@@ -152,15 +169,15 @@ impl TodoTask {
         self.name.as_str()
     }
 
-    pub const fn assignee(&self) -> Uuid {
-        self.assignee
+    pub const fn assignee(&self) -> &User {
+        &self.assignee
     }
 
     pub const fn is_done(&self) -> bool {
         self.done
     }
 
-    pub fn assign_to(&mut self, assignee: Uuid) {
+    pub fn assign_to(&mut self, assignee: User) {
         self.assignee = assignee;
     }
 

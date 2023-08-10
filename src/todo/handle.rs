@@ -1,6 +1,8 @@
 use std::{collections::HashSet, time::Duration};
 
-use super::{list::TodoList, task::todo_list_task, TodoCommandSender, TodoListWatcher};
+use super::{
+    list::TodoList, task::todo_list_task, TodoCommandSender, TodoListInfo, TodoListWatcher,
+};
 
 use anyhow::Context;
 use deadpool_redis::Pool;
@@ -50,6 +52,11 @@ impl TodoListHandle {
         self.connected_users
             .insert(user)
             .then(|| (self.todo_watcher.clone(), self.command_tx.clone()))
+    }
+
+    pub fn peek(&self) -> TodoListInfo<'static> {
+        let list = self.todo_watcher.borrow();
+        TodoListInfo::new_owned(list.id(), list.name().to_owned())
     }
 
     pub fn disconnect_user(&mut self, user: Uuid) {

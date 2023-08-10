@@ -6,12 +6,12 @@ use crate::user::User;
 use super::list::{TodoList, TodoTask};
 
 pub trait Applicable {
-    fn apply(self, todo: &mut TodoList, issuer: Uuid);
+    fn apply(self, todo: &mut TodoList, issuer: User);
 }
 
 #[derive(Debug)]
 pub struct TodoCommand {
-    pub issuer: Uuid,
+    pub issuer: User,
     pub command: Command,
 }
 
@@ -26,7 +26,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const fn with_issuer(self, issuer: Uuid) -> TodoCommand {
+    pub const fn with_issuer(self, issuer: User) -> TodoCommand {
         TodoCommand {
             issuer,
             command: self,
@@ -35,7 +35,7 @@ impl Command {
 }
 
 impl Applicable for Command {
-    fn apply(self, todo: &mut TodoList, issuer: Uuid) {
+    fn apply(self, todo: &mut TodoList, issuer: User) {
         match self {
             Command::TaskCommand(task_command) => task_command.apply(todo, issuer),
             Command::CreateTask => todo.add_task(TodoTask::new(issuer)),
@@ -58,11 +58,11 @@ pub struct TaskCommandMeta {
 pub enum TaskCommand {
     SetDone(bool),
     Rename(String),
-    SetAssignee(Uuid),
+    SetAssignee(User),
 }
 
 impl Applicable for TaskCommandMeta {
-    fn apply(self, todo: &mut TodoList, issuer: Uuid) {
+    fn apply(self, todo: &mut TodoList, issuer: User) {
         if let Some(task) = todo.task_mut(self.task) {
             match self.command {
                 TaskCommand::SetDone(is_done) => {

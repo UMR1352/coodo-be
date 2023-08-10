@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use petname::Petnames;
 use rand::{rngs::StdRng, SeedableRng};
+use redis_macros::{FromRedisValue, ToRedisArgs};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, OnceCell};
 use uuid::Uuid;
@@ -65,7 +66,9 @@ impl UserHandle {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash, FromRedisValue, ToRedisArgs,
+)]
 pub struct User {
     id: Uuid,
     handle: UserHandle,

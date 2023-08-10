@@ -1,3 +1,4 @@
 /target
 
 .session_secret
+config/production.yaml
