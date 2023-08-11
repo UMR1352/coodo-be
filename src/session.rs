@@ -19,6 +19,7 @@ pub fn get_session_layer(redis_pool: Pool) -> SessionLayer<UserSessionStore> {
     SessionLayer::new(session_store, &secret)
         .with_persistence_policy(PersistencePolicy::ChangedOnly)
         .with_http_only(false)
+        .with_secure(false)
         .with_same_site_policy(SameSite::Strict)
 }
 
