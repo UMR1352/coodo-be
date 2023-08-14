@@ -1,9 +1,8 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use anyhow::Context;
 use deadpool_redis::Pool;
 use redis::JsonAsyncCommands;
-use tokio::sync::RwLock;
+use tokio::sync::{oneshot, RwLock};
 use uuid::Uuid;
 
 use crate::{
@@ -35,16 +34,18 @@ impl AppState {
         &self,
         todo: Uuid,
         user_id: Uuid,
-    ) -> anyhow::Result<(TodoListWatcher, TodoCommandSender)> {
-        self.todo_lists
-            .write()
-            .await
-            .entry(todo)
-            .or_insert(
-                TodoListHandle::spawn(todo, self.redis_pool.clone(), self.store_interval).await?,
-            )
-            .get_connection(user_id)
-            .context("Failed to connect to given todo list")
+    ) -> (TodoListWatcher, TodoCommandSender, oneshot::Receiver<()>) {
+        let mut todo_lists = self.todo_lists.write().await;
+        let mut todo_list_handle = match todo_lists.remove(&todo) {
+            Some(handle) => handle,
+            None => TodoListHandle::spawn(todo, self.redis_pool(), self.store_interval)
+                .await
+                .expect("Failed to spawn TodoListHandle"),
+        };
+        let connection_data = todo_list_handle.get_connection(user_id);
+        todo_lists.insert(todo, todo_list_handle);
+
+        connection_data
     }
 
     pub async fn leave_todo_list(&self, todo: Uuid, user_id: Uuid) {

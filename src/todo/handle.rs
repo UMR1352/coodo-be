@@ -1,4 +1,4 @@
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use super::{
     list::TodoList, task::todo_list_task, TodoCommandSender, TodoListInfo, TodoListWatcher,
@@ -6,7 +6,7 @@ use super::{
 
 use anyhow::Context;
 use deadpool_redis::Pool;
-use tokio::task::JoinHandle;
+use tokio::{sync::oneshot, task::JoinHandle};
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -14,7 +14,7 @@ pub struct TodoListHandle {
     command_tx: TodoCommandSender,
     todo_watcher: TodoListWatcher,
     _task_handle: JoinHandle<()>,
-    connected_users: HashSet<Uuid>,
+    connected_users: HashMap<Uuid, oneshot::Sender<()>>,
 }
 
 impl TodoListHandle {
@@ -44,14 +44,21 @@ impl TodoListHandle {
             command_tx,
             todo_watcher: watch_rx,
             _task_handle: task_handle,
-            connected_users: HashSet::default(),
+            connected_users: HashMap::default(),
         })
     }
 
-    pub fn get_connection(&mut self, user: Uuid) -> Option<(TodoListWatcher, TodoCommandSender)> {
-        self.connected_users
-            .insert(user)
-            .then(|| (self.todo_watcher.clone(), self.command_tx.clone()))
+    pub fn get_connection(
+        &mut self,
+        user: Uuid,
+    ) -> (TodoListWatcher, TodoCommandSender, oneshot::Receiver<()>) {
+        let (abort_tx, abort_rx) = oneshot::channel();
+
+        if let Some(prev_session_abort_tx) = self.connected_users.insert(user, abort_tx) {
+            let _ = prev_session_abort_tx.send(());
+        }
+
+        (self.todo_watcher.clone(), self.command_tx.clone(), abort_rx)
     }
 
     pub fn peek(&self) -> TodoListInfo<'static> {

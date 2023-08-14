@@ -76,19 +76,14 @@ async fn join_todo_list(
     let Some(user) = session.get::<User>("user") else {
         return (StatusCode::UNAUTHORIZED, "Establish a session first").into_response();
     };
-    if let Ok((todo_watch, command_tx)) = state.join_todo_list(todo_id, *user.id()).await {
-        session.join_todo_list(&todo_watch.borrow());
+    let (todo_watch, command_tx, abort_rx) = state.join_todo_list(todo_id, *user.id()).await;
+    session.join_todo_list(&todo_watch.borrow());
 
-        ws.on_upgrade(move |socket| {
-            ws_handler(socket, state, todo_id, todo_watch, command_tx, user)
-        })
-    } else {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to join requested todo list",
+    ws.on_upgrade(move |socket| {
+        ws_handler(
+            socket, state, todo_id, todo_watch, command_tx, abort_rx, user,
         )
-            .into_response()
-    }
+    })
 }
 
 #[tracing::instrument(
@@ -105,6 +100,7 @@ async fn ws_handler(
     todo_list_id: Uuid,
     mut todo: TodoListWatcher,
     command_tx: TodoCommandSender,
+    mut abort_rx: tokio::sync::oneshot::Receiver<()>,
     user: User,
 ) {
     let (mut ws_tx, mut ws_rx) = ws.split();
@@ -133,6 +129,11 @@ async fn ws_handler(
             },
             Ok(()) = todo.changed() => {
                 let _ = send_todo_list(&mut todo, &mut ws_tx).await;
+            },
+            _ = &mut abort_rx => {
+                tracing::debug!("Abort received. Closing previous WS connection");
+                let _ = ws_tx.close().await;
+                return;
             },
             else => break,
         }
