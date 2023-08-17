@@ -46,7 +46,7 @@ impl TestApp {
         let port = listener.local_addr().unwrap().port();
         let address = format!("http://127.0.0.1:{}", port);
 
-        let server = coodo_be::startup::make_server(listener, pool.clone(), &settings.todo_handler)
+        let server = coodo_be::startup::make_server(listener, pool.clone())
             .expect("Failed to create server");
         let server_handle = tokio::spawn(server);
 

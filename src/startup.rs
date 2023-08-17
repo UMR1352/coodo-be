@@ -5,7 +5,7 @@ use deadpool_redis::Pool;
 
 use crate::{
     session::get_session_layer,
-    settings::{RedisSettings, Settings, TodoHandlerSettings},
+    settings::{RedisSettings, Settings},
     state::AppState,
 };
 
@@ -27,7 +27,7 @@ impl Application {
             TcpListener::bind(address)?
         };
 
-        let server = make_server(listener, redis_pool.clone(), &settings.todo_handler)?;
+        let server = make_server(listener, redis_pool.clone())?;
 
         Ok(Self {
             server,
@@ -42,11 +42,7 @@ impl Application {
     }
 }
 
-pub fn make_server(
-    listener: TcpListener,
-    redis_pool: Pool,
-    settings: &TodoHandlerSettings,
-) -> anyhow::Result<Server> {
+pub fn make_server(listener: TcpListener, redis_pool: Pool) -> anyhow::Result<Server> {
     use anyhow::Context;
     use tower_http::{
         catch_panic::CatchPanicLayer,
@@ -54,7 +50,7 @@ pub fn make_server(
     };
     use tracing::Level;
 
-    let state = AppState::new(redis_pool.clone(), settings);
+    let state = AppState::new(redis_pool.clone());
     let router = Router::new()
         .merge(crate::routes::router())
         .layer(CatchPanicLayer::new())

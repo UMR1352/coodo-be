@@ -10,7 +10,7 @@ use axum_sessions::{
 use deadpool_redis::{Connection, Pool, PoolError};
 use uuid::Uuid;
 
-use crate::todo::{TodoList, TodoListInfo};
+use crate::redis_fcall;
 
 pub fn get_session_layer(redis_pool: Pool) -> SessionLayer<UserSessionStore> {
     use axum_sessions::{PersistencePolicy, SameSite};
@@ -72,10 +72,7 @@ impl SessionStore for UserSessionStore {
         tracing::trace!("Loading session with id {}", &id);
 
         let mut redis = self.acquire_connection().await?;
-        let session = redis::cmd("FCALL")
-            .arg("session_load")
-            .arg(1)
-            .arg(&id)
+        let session = redis_fcall!(session_load, id.as_str())
             .query_async::<_, String>(&mut redis)
             .await
             .map(|session| serde_json::from_str(&session).unwrap())
@@ -88,14 +85,14 @@ impl SessionStore for UserSessionStore {
     async fn store_session(&self, session: Session) -> async_session::Result<Option<String>> {
         tracing::trace!("Storing session with id {}", session.id());
         let mut redis = self.acquire_connection().await?;
-        redis::cmd("FCALL")
-            .arg("session_store")
-            .arg(1)
-            .arg(session.id())
-            .arg(&serde_json::to_string(&session)?)
-            .query_async(&mut redis)
-            .await
-            .context("Failed to store session")?;
+        redis_fcall!(
+            session_store,
+            session.id(),
+            &serde_json::to_string(&session)?
+        )
+        .query_async(&mut redis)
+        .await
+        .context("Failed to store session")?;
 
         session.reset_data_changed();
         Ok(session.into_cookie_value())
@@ -105,10 +102,7 @@ impl SessionStore for UserSessionStore {
     async fn destroy_session(&self, session: Session) -> async_session::Result {
         tracing::trace!("Destroying session with id {}", &session.id());
         let mut redis = self.acquire_connection().await?;
-        redis::cmd("FCALL")
-            .arg("session_destroy")
-            .arg(1)
-            .arg(session.id())
+        redis_fcall!(session_destroy, session.id())
             .query_async(&mut redis)
             .await?;
 
@@ -119,9 +113,7 @@ impl SessionStore for UserSessionStore {
     async fn clear_store(&self) -> async_session::Result {
         tracing::trace!("Clearing session store");
         let mut redis = self.acquire_connection().await?;
-        redis::cmd("FCALL")
-            .arg("session_clear_all")
-            .arg(0)
+        redis_fcall!(session_clear_all)
             .query_async(&mut redis)
             .await?;
 
@@ -130,18 +122,16 @@ impl SessionStore for UserSessionStore {
 }
 
 pub trait TodoSessionExt {
-    fn join_todo_list(&mut self, list: &TodoList);
+    fn join_todo_list(&mut self, list: Uuid);
     fn leave_todo_list(&mut self, id: Uuid);
 }
 
 impl TodoSessionExt for WritableSession {
-    fn join_todo_list(&mut self, list: &TodoList) {
-        let mut user_lists = self
-            .get::<Vec<TodoListInfo>>("user_lists")
-            .unwrap_or_default();
+    fn join_todo_list(&mut self, list: Uuid) {
+        let mut user_lists = self.get::<Vec<Uuid>>("user_lists").unwrap_or_default();
 
-        if !user_lists.iter().any(|td| td.id() == list.id()) {
-            user_lists.push(list.as_info());
+        if !user_lists.iter().any(|td| *td == list) {
+            user_lists.push(list);
             if self.insert("user_lists", user_lists).is_err() {
                 tracing::error!("Failed to update user session");
             }
@@ -149,10 +139,8 @@ impl TodoSessionExt for WritableSession {
     }
 
     fn leave_todo_list(&mut self, id: Uuid) {
-        let mut user_lists = self
-            .get::<Vec<TodoListInfo>>("user_lists")
-            .unwrap_or_default();
-        user_lists.retain(|list| list.id() != id);
+        let mut user_lists = self.get::<Vec<Uuid>>("user_lists").unwrap_or_default();
+        user_lists.retain(|list| *list != id);
         if self.insert("user_lists", user_lists).is_err() {
             tracing::error!("Failed to update user session");
         }

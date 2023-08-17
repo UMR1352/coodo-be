@@ -1,12 +1,21 @@
+use anyhow::Context;
+use axum::async_trait;
+use deadpool_redis::Connection;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::user::User;
+use crate::{redis_fcall, user::User};
 
 use super::list::{TodoList, TodoTask};
 
+#[async_trait]
 pub trait Applicable {
-    fn apply(self, todo: &mut TodoList, issuer: User);
+    async fn apply(
+        self,
+        redis: &mut Connection,
+        todo_id: Uuid,
+        issuer: User,
+    ) -> anyhow::Result<TodoList>;
 }
 
 #[derive(Debug)]
@@ -20,8 +29,6 @@ pub struct TodoCommand {
 pub enum Command {
     TaskCommand(TaskCommandMeta),
     CreateTask,
-    UserJoin(User),
-    UserLeave(User),
     SetListName(String),
 }
 
@@ -34,15 +41,30 @@ impl Command {
     }
 }
 
+#[async_trait]
 impl Applicable for Command {
-    fn apply(self, todo: &mut TodoList, issuer: User) {
-        match self {
-            Command::TaskCommand(task_command) => task_command.apply(todo, issuer),
-            Command::CreateTask => todo.add_task(TodoTask::new(issuer)),
-            Command::UserJoin(user) => todo.add_user(user),
-            Command::UserLeave(user) => todo.remove_user(*user.id()),
-            Command::SetListName(name) => todo.rename(name),
+    async fn apply(
+        self,
+        redis: &mut Connection,
+        todo_id: Uuid,
+        issuer: User,
+    ) -> anyhow::Result<TodoList> {
+        let todo_id_str = todo_id.to_string();
+
+        if let Command::TaskCommand(task_cmd) = self {
+            return task_cmd.apply(redis, todo_id, issuer).await;
         }
+
+        let redis_cmd = match self {
+            Command::CreateTask => redis_fcall!(add_task, todo_id_str, TodoTask::new(issuer)),
+            Command::SetListName(name) => redis_fcall!(set_todo_name, todo_id_str, name),
+            Command::TaskCommand(_) => unreachable!(),
+        };
+
+        redis_cmd
+            .query_async(redis)
+            .await
+            .context("Failed to apply TodoCommand")
     }
 }
 
@@ -61,20 +83,29 @@ pub enum TaskCommand {
     SetAssignee(User),
 }
 
+#[async_trait]
 impl Applicable for TaskCommandMeta {
-    fn apply(self, todo: &mut TodoList, issuer: User) {
-        if let Some(task) = todo.task_mut(self.task) {
-            match self.command {
-                TaskCommand::SetDone(is_done) => {
-                    task.set_done(is_done);
-                    task.assign_to(issuer)
-                }
-                TaskCommand::Rename(name) => {
-                    task.rename(name);
-                }
-                TaskCommand::SetAssignee(assignee) => task.assign_to(assignee),
+    async fn apply(
+        self,
+        redis: &mut Connection,
+        todo_id: Uuid,
+        issuer: User,
+    ) -> anyhow::Result<TodoList> {
+        let todo_id = todo_id.to_string();
+        let task = self.task.to_string();
+        let redis_cmd = match self.command {
+            TaskCommand::SetDone(is_done) => {
+                redis_fcall!(set_task_done, todo_id, task, is_done, issuer)
             }
-        }
+            TaskCommand::Rename(name) => redis_fcall!(set_task_name, todo_id, task, name),
+            TaskCommand::SetAssignee(assignee) => {
+                redis_fcall!(set_task_assignee, todo_id, task, assignee)
+            }
+        };
+        redis_cmd
+            .query_async(redis)
+            .await
+            .context("Failed to apply TodoCommand")
     }
 }
 
